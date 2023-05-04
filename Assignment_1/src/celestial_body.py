@@ -48,7 +48,6 @@ class Celestial:
             
             if r >= i.r_bounds[0] and r < i.r_bounds[1]:
                 return i.get_rho(r)
-
         return 0
 
     def add_layer(self,layer_name,layer):
@@ -63,13 +62,11 @@ class Celestial:
         assert np.all(r >= 0), "distance is negative!"
         return np.sum([x.get_mass(r) for x in self.layers.values()])
         
-
     def get_g(self, r):
         
         assert np.all(r >= 0), "distance is negative!"
         return UNI_GRAV * self.get_mass(r) / r**2
         
-
     def get_mmoi(self):
         return np.sum([x.get_mmoi() for x in self.layers.values()])
     
