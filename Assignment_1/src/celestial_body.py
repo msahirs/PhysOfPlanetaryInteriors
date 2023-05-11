@@ -29,6 +29,23 @@ def rk4(dydx, x0, y0, x_f, steps):
         x0 = x0 + h
     return hist
 
+def f_euler(dydx, x0, y0, x_f, steps):
+    # Count number of iterations using step size or
+    # step height h
+    hist = [y0]
+    h = abs(((x_f - x0)/steps))
+    # Iterate for number of iterations
+    y = y0
+    for i in range(1, steps):
+        "Apply forward difference to find next value of y"
+        # Update next value of y
+        y = y + h * dydx(x0, y)
+
+        hist.append(y)
+        # Update next value of x
+        x0 = x0 + h
+    return hist
+
 
 class Celestial:
     """ Parent (Super) Class to represent celestial objects
@@ -46,7 +63,7 @@ class Celestial:
 
         for i in self.layers.values():
             if r >= i.r_bounds[0] and r < i.r_bounds[1]:
-                print(i.rho_type)
+                
                 return i.get_rho(r)
             
         return 0
@@ -76,7 +93,7 @@ class Celestial:
             
             return self._rho_func(r) * self.get_g(r)
         
-        p_range = rk4(p_func,r_probe,0,self.top_bound,steps)
+        p_range = f_euler(p_func,r_probe,0,self.top_bound,steps)
         
         return p_range[::-1]
 
