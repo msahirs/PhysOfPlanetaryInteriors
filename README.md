@@ -4,7 +4,7 @@ Hello! I'm Sahir, someone who's happening to be taking this course in the TU Del
 
 #### Assignments Status
 
-- __Assignment 1:__ ___Bulk vs. 1D profile of a planetary interior___ (In progress)
+- __Assignment 1:__ ***Bulk vs. 1D profile of a planetary interior*** (In progress)
 - __Assignment 2:__ _Not announced_
 - __Assignment 3:__ _Not announced_
 #### Dependencies
