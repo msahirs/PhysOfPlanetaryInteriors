@@ -28,6 +28,7 @@ class InternalLayer_1D(InternalLayer):
     def __init__(self, r_start, r_end, rho_type, **kwargs) -> None:
         self.r_bounds = (r_start,r_end)
         self.rho_type = rho_type
+        self.k = 0 # TODO
         self.params = kwargs
 
         self.rho_function = self._rho_func_generator()
