@@ -83,6 +83,7 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
     # heat flux. This can be used to add sources/sinks to the poisson equation
     # Below line is set such that no added/removed heat
     # COMMENT: any reason? Is already 0
+    # REPLY: Yeah was just there for testing heat flux addition
     # b[1:-1] = 0
 
     # Solve System of Equations
