@@ -3,7 +3,6 @@ import numpy as np
 from scipy.integrate import quad
 
 # CONSTANTS #
-
 # The universal gravitational constant in m^3 * kg^-1 * s^-2
 # https://en.wikipedia.org/wiki/Gravitational_constant
 UNI_GRAV = 6.6743015E-11
@@ -24,9 +23,10 @@ class InternalLayer_1D(InternalLayer):
 
     The layer density can be specified as purely homogenous, linearly increasing
     or decreasing, or a custom function - i.e. `rho(r)`
-    """    
+    """
+
     def __init__(self, r_start, r_end, rho_type, **kwargs) -> None:
-        self.r_bounds = (r_start,r_end)
+        self.r_bounds = (r_start, r_end)
         self.rho_type = rho_type
         self.k = 0 # TODO used for conductivity
         self.params = kwargs
@@ -44,47 +44,39 @@ class InternalLayer_1D(InternalLayer):
                 b = self.params["y_int"]
                 m = self.params["slope"]
 
-                return m * (r-self.r_bounds[0]) + b
-        
+                return m * (r - self.r_bounds[0]) + b
+
         elif self.rho_type == "custom":
-                return self.params["func"]
-        
+            return self.params["func"]
+
         else:
             raise Exception("Error in rho_type input string")
-        
+
         return np.vectorize(rho_func)
-    
+
     def get_rho(self, r):
 
-        if not isinstance(r,np.ndarray):
+        if not isinstance(r, np.ndarray):
             r = np.array(r)
 
-        assert np.all((self.r_bounds[0]<=r) * (self.r_bounds[1]>=r)), \
+        assert np.all((self.r_bounds[0] <= r) * (self.r_bounds[1] >= r)), \
             "Elements within input range are out of bounds"
 
         return self.rho_function(r)
-    
-    def get_tot_mass(self):
-        # import time
-        # start = time.time()
 
-        def get_dM_dr(r):
-            return 4 * np.pi * self.rho_function(r) * r**2
+    def get_tot_mass(self):
 
         # # Use of midpoint rule (Slower than scipy quad)
         # r_range = np.linspace(self.r_bounds[0],self.r_bounds[1], N)
         # dM_dr = 4 * np.pi * self.get_rho(r_range) * r_range**2
         # mass = np.sum(np.diff(r_range) * (dM_dr[:-1] + np.diff(dM_dr)/2))
-        
-        # Use of scipy quad (fast)
-        mass = quad(get_dM_dr,self.r_bounds[0],self.r_bounds[1])
 
-        # end = time.time()
-        # print(f"Integration takes {end-start} seconds")
+        # Use of scipy quad (fast)
+        mass = quad(self.get_dM_dr, self.r_bounds[0], self.r_bounds[1])
 
         return mass[0]
-    
-    def get_mass(self, u_bound,):
+
+    def get_mass(self, u_bound, ):
 
         l_bound = self.r_bounds[0]
 
@@ -92,57 +84,75 @@ class InternalLayer_1D(InternalLayer):
             return 0.
         elif u_bound > self.r_bounds[1]:
             return self.get_tot_mass()
-        
-        # import time
-        # start = time.time()
-        
-        # Lambda-esque function to calculate infinitesmial shell 
-        # element mass
-        def get_dM_dr(r):
-            return 4 * np.pi * self.rho_function(r) * r**2
-        
-        # Use of scipy quad (fast)
-        mass = quad(get_dM_dr, l_bound, u_bound)
 
-        # end = time.time()
-        # print(f"Integration takes {end-start} seconds")
+        # Use of scipy quad (fast)
+        mass = quad(self.get_dM_dr, l_bound, u_bound)
+
         return mass[0]
-    
+
     def _get_g_iso(self, r):
-        return UNI_GRAV * self.get_mass(r) / r**2
-    
+        return UNI_GRAV * self.get_mass(r) / r ** 2
+
     def get_mmoi(self):
 
-        def get_dI_dr(r):
-            return (8/3) * np.pi * self.rho_function(r) * r**4
-        
-        mmoi = quad(get_dI_dr, self.r_bounds[0],self.r_bounds[1])
+        mmoi = quad(self.get_dI_dr, self.r_bounds[0], self.r_bounds[1])
 
-        # end = time.time()
-        # print(f"Integration takes {end-start} seconds")
         return mmoi[0]
-    
-    
-def _test_func_1():
 
-    def density(r):
-        return 1000 - 4 * r - r ** 2.5 - 3 * r ** 1.4
-    
+    # Lambda-esque function to calculate infinitesmial shell
+    # element mass
+    def get_dM_dr(self, r):
+        return 4 * np.pi * self.rho_function(r) * r ** 2
+
+    def get_dI_dr(self, r):
+        return (8 / 3) * np.pi * self.rho_function(r) * r ** 4
+
+
+def _test_func_1():
     Earth = InternalLayer_1D(0, 6378000,
-                         "constant",
-                         y_int = 10000, slope = -50.3,
-                         const_rho = 5515,
-                         func = density)
-    
+                             "constant",
+                             const_rho=5515)
+    print("Test: CONSTANT")
     print("Earth Mass:", Earth.get_tot_mass())
-    print("Grav accel at surface:",Earth._get_g_iso(6378E3))
+    print("Grav accel at surface:", Earth._get_g_iso(6378E3))
     print("Earth MMoI:", Earth.get_mmoi())
     print("Earth MMoI factor:",
-            Earth.get_mmoi()/((6378E3**2) * Earth.get_tot_mass()))
+          Earth.get_mmoi() / ((6378E3 ** 2) * Earth.get_tot_mass()))
+    print()
 
-# _test_func_1()
+
+def _test_func_2():
+    Earth = InternalLayer_1D(0, 6378000,
+                             "linear",
+                             y_int=10000, slope=-50.3)
+
+    print("Test: LINEAR")
+    print("Earth Mass:", Earth.get_tot_mass())
+    print("Grav accel at surface:", Earth._get_g_iso(6378E3))
+    print("Earth MMoI:", Earth.get_mmoi())
+    print("Earth MMoI factor:",
+          Earth.get_mmoi() / ((6378E3 ** 2) * Earth.get_tot_mass()))
+    print()
 
 
-        
-        
-        
+def _test_func_3():
+    def density(r):
+        return 1000 - 4 * r - r ** 2.5 - 3 * r ** 1.4
+
+    Earth = InternalLayer_1D(0, 6378000,
+                             "custom",
+                             func=density)
+
+    print("Test: CUSTOM")
+    print("Earth Mass:", Earth.get_tot_mass())
+    print("Grav accel at surface:", Earth._get_g_iso(6378E3))
+    print("Earth MMoI:", Earth.get_mmoi())
+    print("Earth MMoI factor:",
+          Earth.get_mmoi() / ((6378E3 ** 2) * Earth.get_tot_mass()))
+    print()
+
+
+if __name__ == '__main__':
+    _test_func_1()
+    _test_func_2()
+    _test_func_3()
