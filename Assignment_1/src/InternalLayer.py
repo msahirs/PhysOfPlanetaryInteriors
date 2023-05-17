@@ -28,7 +28,7 @@ class InternalLayer_1D(InternalLayer):
     def __init__(self, r_start, r_end, rho_type, **kwargs) -> None:
         self.r_bounds = (r_start,r_end)
         self.rho_type = rho_type
-        self.k = 0 # TODO
+        self.k = 0 # TODO used for conductivity
         self.params = kwargs
 
         self.rho_function = self._rho_func_generator()
@@ -95,6 +95,9 @@ class InternalLayer_1D(InternalLayer):
         
         # import time
         # start = time.time()
+        
+        # Lambda-esque function to calculate infinitesmial shell 
+        # element mass
         def get_dM_dr(r):
             return 4 * np.pi * self.rho_function(r) * r**2
         
