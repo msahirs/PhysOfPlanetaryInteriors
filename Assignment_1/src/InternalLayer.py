@@ -90,6 +90,7 @@ class InternalLayer_1D(InternalLayer):
 
         return mass[0]
 
+    # g(r) = G M(r) / r**2
     def _get_g_iso(self, r):
         return UNI_GRAV * self.get_mass(r) / r ** 2
 
@@ -101,6 +102,7 @@ class InternalLayer_1D(InternalLayer):
 
     # Lambda-esque function to calculate infinitesmial shell
     # element mass
+    # dM / dr = 4 pi rho r ** 2
     def get_dM_dr(self, r):
         return 4 * np.pi * self.rho_function(r) * r ** 2
 
