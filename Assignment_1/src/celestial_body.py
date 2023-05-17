@@ -98,6 +98,18 @@ class Celestial:
 
         return p_range[::-1]
 
+    def get_density(self, T, initial_rho):
+        alpha_t = 3e-5
+        pass
+        # while 1:
+        #     delta_p =
+        #     delta_t = fdm_funcs()
+        #     k =
+        #     rho = initial_rho * (1 - alpha_t * delta_t + 1 / k * delta_p)
+        #
+        #
+        # return density
+
 
 # TESTS DEFINITION ##
 

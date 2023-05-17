@@ -27,13 +27,13 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
     `T_end` : float
         Fixed Temperature at end of medium
     `L` : list
-        Length of 1-D medium
+        radii of all layers
     `k` : list
-        Material conductivity coeffcient
+        Material conductivity coeffcient per layer
     `rho` : list
-        Material mass density
+        Material mass density per layer
     `Cp` : list
-        Specific Heat capacity
+        Specific Heat capacity per layer
     `x_steps` : int
         Number of interior nodes
 
@@ -45,13 +45,11 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
         Steady-state temperature at discrete nodes
     """
 
-
-    # Calculation of Diffusion Coefficient (see description links)
-    kappa = np.zeros(x_steps)
-
     # Discretise medium into x_steps number of nodes
     x_grid = np.linspace(0, max(L), x_steps)
 
+    # Calculation of Diffusion Coefficient (see description links)
+    kappa = np.zeros(x_steps)
     for idx, length in enumerate(L):
         if idx:
             kappa[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = k[idx] / (Cp[idx] * rho[idx])
@@ -69,7 +67,7 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
     b = np.zeros(x_steps)
 
     # Setup of FD matrix
-    np.fill_diagonal(A[1:-1, 1:-1], 2 * fd_factor[1:-1])
+    np.fill_diagonal(A[1:-1, 1:-1], fd_factor[2:] + fd_factor[:-2])
     np.fill_diagonal(A[1:-1, 2:], -fd_factor[2:])
     np.fill_diagonal(A[1:-1, :-2], -fd_factor[:-2])
 
@@ -94,8 +92,8 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
 
 
 def test_func_1():
-    x, y = diffusion_1d_steady(T_start=15, T_end=3700, L=(900, 1400, 1900), k=(4, 5, 6), rho=(3500, 1000, 500),
-                               Cp=(570, 600, 120), x_steps=100)
+    x, y = diffusion_1d_steady(T_start=15, T_end=3700, L=(900, 1400, 1900), k=(6, 5, 3), rho=(3500, 1000, 500),
+                               Cp=(570, 600, 400), x_steps=100)
 
     plt.plot(x, y)
     plt.xlabel("Length along medium [m]")
