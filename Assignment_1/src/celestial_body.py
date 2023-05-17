@@ -1,5 +1,6 @@
 import numpy as np
 from InternalLayer import *
+from fdm_funcs import diffusion_1d_steady
 import matplotlib.pyplot as plt
 
 # CONSTANTS #
@@ -31,7 +32,7 @@ def rk4(dydx, x0, y0, x_f, steps):
     return hist
 
 
-def f_euler(dydx, x0, y0, x_f, steps):
+def f_euler(dydx, x0, x_f, y0, steps):
     # Count number of iterations using step size or
     # step height h
     hist = [y0]
@@ -91,24 +92,75 @@ class Celestial:
         return np.sum([x.get_mmoi() for x in self.layers.values()])
 
     def get_p_range(self, r_probe, steps):
+        # pressure from r_surface to r_probe
         def p_func(r, t):
             return self._rho_func(r) * self.get_g(r)
 
-        p_range = f_euler(p_func, r_probe, 0, self.top_bound, steps)
+        p_range = f_euler(p_func, r_probe, self.top_bound, 0, steps)
 
         return p_range[::-1]
 
-    def get_density(self, T, initial_rho):
+    def get_radius(self):
+        return [_.r_bounds[1] for _ in self.layers]
+
+    def get_Cp(self):
+        return [_.cp for _ in self.layers]
+
+    def get_k(self):
+        return [_.k for _ in self.layers]
+
+    def get_k(self):
+        return [_.rho for _ in self.layers]
+
+    def get_rhos(self, x_grid):
+        return [self._rho_func(r) for r in x_grid]
+
+    def get_dP_drho(self, r_probe, steps):
+        def p_func(r, t):
+            return r * self.get_g(r)
+
+        p_range = f_euler(p_func, r_probe, self.top_bound, 0, steps)
+
+        return p_range[::-1]
+
+    def get_density(self, t_start, t_end, K, r_probe, steps, epsilon):
         alpha_t = 3e-5
-        pass
-        # while 1:
-        #     delta_p =
-        #     delta_t = fdm_funcs()
-        #     k =
-        #     rho = initial_rho * (1 - alpha_t * delta_t + 1 / k * delta_p)
-        #
-        #
-        # return density
+        # extracting list containing radii of celestial
+        L = self.get_radius()
+        # get heat capacity per layer
+        Cp = self.get_Cp()
+        # get material conductivity coefficient
+        k = self.get_k()
+        x_grid = np.linspace(0, max(L), steps)
+
+        # get initial_rho
+        rho = [self.get_rhos(x_grid=x_grid)]
+
+        # precompute kappa for efficiency
+        kappa = np.zeros(steps)
+        for idx, length in enumerate(L):
+            if idx:
+                kappa[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = k[idx] / Cp[idx]
+            else:
+                kappa[x_grid <= length] = k[idx] / Cp[idx]
+
+        while 1:
+            # compute change in pressure
+            delta_p = self.get_p_range(r_probe=r_probe, steps=x_grid)
+
+            # TODO check if kappa needs to be hard copied
+            # compute change in temperature
+            delta_t = diffusion_1d_steady(t_start, t_end, kappa, rho, x_grid)
+
+            # TODO check if rho_0 is initial rho or rho from previous iteration
+            # compute new density
+            rho.append(rho[-1] * (1 - alpha_t * delta_t + 1 / K * delta_p))
+
+            # if convergent
+            if abs(rho[-1] - rho[-2]) < epsilon:
+                break
+
+        return rho
 
 
 # TESTS DEFINITION ##

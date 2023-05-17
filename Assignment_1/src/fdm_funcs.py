@@ -10,7 +10,7 @@ speed and reduce computational complexity - in case of iterative usage
 """
 
 
-def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
+def diffusion_1d_steady(T_start, T_end, kappa, rho, x_grid, ):
     """`diffusion_1d_steady(...)` is used to calculate the 1D
     Poisson (Heat) equation at steady state.
 
@@ -34,8 +34,8 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
         Material mass density per layer
     `Cp` : list
         Specific Heat capacity per layer
-    `x_steps` : int
-        Number of interior nodes
+    `x_grid` : ndarray
+        x
 
     Returns
     -------
@@ -46,15 +46,10 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
     """
 
     # Discretise medium into x_steps number of nodes
-    x_grid = np.linspace(0, max(L), x_steps)
+    x_steps = len(x_grid)
 
     # Calculation of Diffusion Coefficient (see description links)
-    kappa = np.zeros(x_steps)
-    for idx, length in enumerate(L):
-        if idx:
-            kappa[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = k[idx] / (Cp[idx] * rho[idx])
-        else:
-            kappa[x_grid <= length] = k[idx] / (Cp[idx] * rho[idx])
+    kappa *= rho
 
     # Compute length of discrete element
     dx = 1 / x_steps
@@ -92,8 +87,11 @@ def diffusion_1d_steady(T_start, T_end, L, k, rho, Cp, x_steps, ):
 
 
 def test_func_1():
-    x, y = diffusion_1d_steady(T_start=15, T_end=3700, L=(900, 1400, 1900), k=(6, 5, 3), rho=(3500, 1000, 500),
-                               Cp=(570, 600, 400), x_steps=100)
+    steps = 100
+    L = (900, 1400, 1900)
+    x_grid = np.linspace(0, max(L), steps)
+    x, y = diffusion_1d_steady(T_start=15, T_end=3700, L=L, k=(6, 5, 3), rho=np.ones(steps),
+                               Cp=(570, 600, 400), x_grid=x_grid)
 
     plt.plot(x, y)
     plt.xlabel("Length along medium [m]")
