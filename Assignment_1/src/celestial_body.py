@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 UNI_GRAV = 6.6743015E-11
 
 
+# TODO visualization, test convergence, matrix supports convection
+# TODO write report
+# TODO Burnman tutorial
+
+
 def rk4(dydx, x0, y0, x_f, steps):
     # Count number of iterations using step size or
     # step height h
@@ -42,7 +47,7 @@ def f_euler(dydx, x0, x_f, y0, steps):
     for i in range(1, steps):
         "Apply forward difference to find next value of y"
         # Update next value of y
-        y = y + h * dydx(x0, y, i)
+        y = y + h * dydx(x0, y)
 
         hist.append(y)
         # Update next value of x
@@ -76,25 +81,25 @@ class Celestial:
         self.top_bound = layer.r_bounds[1]
 
     def get_tot_mass(self,
-                     rho = None, r_range = None):
+                     rho=None, r_range=None):
 
         if rho is not None:
-            M = np.cumsum(4*np.pi*rho[:-1]*r_range[:-1]**2 * np.diff(r_range))
+            M = np.cumsum(4 * np.pi * rho[:-1] * r_range[:-1] ** 2 * np.diff(r_range))
 
-            return np.append(M,M[-1])
+            return np.append(M, M[-1])
 
-        surface_r = self.layers.values()[-1].r_bounds[1]
+        surface_r = self.layers[-1].r_bounds[1]
         return self.get_mass(surface_r)
 
-    def get_mass(self, r,):
+    def get_mass(self, r, ):
         assert np.all(r >= 0), "distance is negative!"
         return np.sum([_.get_mass(r) for _ in self.layers])
 
     def get_g(self, r,
-              rho_g = None, r_range_g = None):
+              rho_g=None, r_range_g=None):
 
         if rho_g is not None:
-            return UNI_GRAV * self.get_tot_mass(rho = rho_g,r_range = r_range_g) / r_range_g ** 2
+            return UNI_GRAV * self.get_tot_mass(rho=rho_g, r_range=r_range_g) / r_range_g ** 2
 
         assert np.all(r >= 0), "distance is negative!"
         return UNI_GRAV * self.get_mass(r) / r ** 2
@@ -103,15 +108,14 @@ class Celestial:
         return np.sum([_.get_mmoi() for _ in self.layers])
 
     def get_p_range(self, r_probe, steps,
-                    rho=None, r_range = None):
+                    rho=None, r_range=None):
 
         if rho is not None:
-           diff_r = np.diff(r_range)
-           ghost_r = diff_r[-1]
-           p_discrete = np.cumsum(rho * self.get_g(1,rho_g=rho,r_range_g=r_range) * \
-                np.append(diff_r,ghost_r))
+            diff_r = np.diff(r_range)
+            p_discrete = np.cumsum(rho * self.get_g(1, rho_g=rho, r_range_g=r_range) * \
+                                   np.append(diff_r, diff_r[-1]))
 
-           return p_discrete[::-1]
+            return p_discrete[::-1]
 
         def p_func(r, t):
             return self._rho_func(r) * self.get_g(r)
@@ -119,6 +123,9 @@ class Celestial:
         p_range = f_euler(p_func, r_probe, 0, self.top_bound, steps)
 
         return p_range[::-1]
+
+    def get_radii(self):
+        return [_.r_bounds[1] for _ in self.layers]
 
     def get_Cp(self):
         return [_.cp for _ in self.layers]
@@ -129,23 +136,23 @@ class Celestial:
     def get_rhos(self, x_grid):
         return np.array([self._rho_func(r) for r in x_grid])
 
-    def get_density(self, initial_rho, initial_Ks, T, steps, r_probe=1e-7, epsilon=1e-2):
+    def _get_new_rho(self, rho, p, K, t, alpha_t=3E-5):
+        dp = np.diff(p)
+        dt = np.diff(t)
+        return rho * (1 - alpha_t * np.append(dt, dt[-1]) + (1 / K) + np.append(dp, dp[-1]))
 
-        # CONSTANT
-        alpha_t = 3e-5
+    def run_convergence(self, initial_rho, initial_Ks, r_range, max_iterations, T=(15, 3500), epsilon=1e-5):
+
+        # PARAMS
+        steps = len(r_range)
 
         # VARIABLES
         # extracting list containing radii of celestial
-        L = self.get_radius()
+        L = self.get_radii()
         # get heat capacity per layer
         Cp = self.get_Cp()
         # get material conductivity coefficient
         k = self.get_k()
-
-        x_grid = np.linspace(0, max(L), steps)
-
-        # get initial_rho
-        rho = [self.get_rhos(x_grid=x_grid)]
 
         # precompute part of kappa for efficiency
         kappa = np.zeros(steps)
@@ -154,72 +161,56 @@ class Celestial:
 
         for idx, length in enumerate(L):
             if idx:
-                kappa[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = k[idx] / Cp[idx]
-                K[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = initial_Ks[idx]
-                initial_rhos[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = initial_rho[idx]
+                kappa[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = k[idx] / Cp[idx]
+                K[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = initial_Ks[idx]
+                initial_rhos[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = initial_rho[idx]
             else:
-                kappa[x_grid <= length] = k[idx] / Cp[idx]
-                K[x_grid <= length] = initial_Ks[idx]
-                initial_rhos[x_grid <= length] = initial_rho[idx]
+                kappa[r_range <= length] = k[idx] / Cp[idx]
+                K[r_range <= length] = initial_Ks[idx]
+                initial_rhos[r_range <= length] = initial_rho[idx]
 
-        #while 1:
-        for i in range(100):
-            # compute change in pressure
-            p = self.get_p_range(r_probe=r_probe, rho=rho[-1], steps=steps)
+        # get initial rho, p, and k
+        rho = [self.get_rhos(x_grid=r_range)]
+        K = [K]
+        p = [np.array(self.get_p_range(r_range[0], steps))]
 
-            # compute change in temperature
-            _, t = diffusion_1d_steady(T, np.copy(kappa), rho[-1], x_grid)
+        for i in range(max_iterations):
+            if i % 5 == 0:
+                print("Iteration {} / {}".format(i, max_iterations))
 
-            # compute new density
-            rho.append(initial_rhos * (1 - alpha_t * np.diff(t, append=1e-7) + np.diff(p, append=1e-7) / K))
+            _, t = diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range)
 
-            K = np.diff(p, append=1e-7) / (np.diff(rho[-1], append=1e-7) + 1e-10)
-            K *= rho[-1]
-            K += 1e-10
+            new_rho = self._get_new_rho(rho[-1], p[-1], K[-1], t)
+            rho.append(new_rho)
 
-            if all(abs(rho[-1] - rho[-2]) < epsilon):
-                print("Converged")
+            dp_drho = np.diff(p[-1]) / np.diff(rho[-1])
+            dp_drho = np.append(dp_drho, dp_drho[-1])
+
+            K.append(rho[-1] * dp_drho)
+
+            p.append(self.get_p_range(1, 1, rho[-1], r_range))
+
+            if convergence_criteria(K, p, rho, epsilon):
                 break
 
-        return x_grid, np.array(rho)
-
-    def _get_new_rho(self,rho,alpha_t,p, K, T_dist):
-
-        return rho * (1-alpha_t*np.diff(T_dist) * (1/K) * np.diff(p))
-
-    def get_K(self,r_range, iterations):
-        prev_converge = 0
-        final_k = []
-        conv = []
-        rho = np.array([self._rho_func(r) for r in r_range])
-        p = np.array(self.get_p_range(r_range[0],len(r_range)))
-        K = np.ones(len(r_range)) * 4E11 # Dummy K value
-        alpha_t = 3E-5 # Dummy Expansion coeff
-
-        for i in range(iterations):
-            if i % 5 == 0:
-                print("Iteration at:", i, "of", iterations)
+        return np.array(K), np.array(p), np.array(rho)
 
 
-            T_dist = fdm_funcs.diffusion_1d_steady(15, 3500, [self.top_bound],
-                                                [4], rho, [400], len(r_range))[1]
+def convergence_criteria(K: list, p: list, rho: list, epsilon):
+    if any(abs(K[-1] - K[-2]) > epsilon):
+        return False
+    print("K has converged")
 
-            new_rho = self._get_new_rho(rho,alpha_t,
-                                        np.append(p,p[-1]),
-                                        K,
-                                        np.append(T_dist,T_dist[-1]))
+    if any(abs(p[-1] - p[-2]) > epsilon):
+        return False
+    print("p has converged")
 
-            dp_drho = np.diff(p)/np.diff(new_rho)
-            dp_drho = np.append(dp_drho,dp_drho[-1])
+    if any(abs(rho[-1] - rho[-2]) > epsilon):
+        return False
+    print("rho has converged")
 
-            K = new_rho * dp_drho
+    return True
 
-
-            p = self.get_p_range(1,1,new_rho,r_range)
-            rho = new_rho
-            conv.append(prev_converge / K[100])
-            prev_converge = K[100]
-        return K, conv
 
 # TESTS DEFINITION ##
 
@@ -251,7 +242,7 @@ def test_func_1():
     #                         func = lambda x: 4**x))
 
     # mmoi = earth.get_mmoi()
-    r_range = np.linspace(0.1, 6378000-1, 5000).tolist()
+    r_range = np.linspace(0.1, 6378000 - 1, 5000).tolist()
 
     # g_range = [earth.get_g(r) for r in r_range]
     # r_range_2 = np.linspace(6378000/2, 6378000, 1000).tolist()
@@ -268,13 +259,13 @@ def test_func_1():
     # plt.show()
 
     iter = 20
-    K_vals,conv = earth.get_K(r_range,iter)
+    K_vals, conv = earth.get_K(r_range, iter)
     print(len(K_vals))
     # plt.plot(r_range,earth.get_g(1,rho_range,r_range))
     # plt.plot(r_range,earth.get_tot_mass(rho_range,r_range))
     # plt.plot(r_range,earth.get_p_range(1,1,rho_range,r_range))
 
-    plt.plot(r_range,K_vals)
+    plt.plot(r_range, K_vals)
     plt.show()
     plt.plot([i for i in range(iter)], conv)
     plt.show()
@@ -310,12 +301,26 @@ def test_func_2():
                                                cp=cp_ice,
                                                k=k_ice))
 
-    initial_rhos = (6000, 2800, 1000)           # our sheet
-    initial_Ks = (5.54e11, 3.91e11, 8.13e10)    # our sheet
-    x, y = ganymede.get_density(initial_rho=initial_rhos, initial_Ks=initial_Ks, T=(1980, T_ice), steps=100, epsilon=1e-2)
+    initial_rhos = (6000, 2800, 1000)  # our sheet
+    initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
+    r_range = np.linspace(0.1, 2634 - 1, 5000)
+    K, p, rho = ganymede.run_convergence(initial_rho=initial_rhos, initial_Ks=initial_Ks, T=(1980, T_ice),
+                                         r_range=r_range,
+                                         max_iterations=10000, epsilon=1e-5)
 
-    plt.matshow(y)
-    plt.show()
+    plt.figure()
+    plt.subplot(311)
+    plt.matshow(K)
+    plt.title("Bulk Modulus")
+
+    plt.subplot(312)
+    plt.matshow(p)
+    plt.title("Pressure")
+
+    plt.subplot(313)
+    plt.matshow(rho)
+    plt.title("Density")
+    plt.tight_layout()
 
 
 if __name__ == '__main__':
