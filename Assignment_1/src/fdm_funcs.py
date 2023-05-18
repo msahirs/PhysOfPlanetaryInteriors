@@ -104,4 +104,5 @@ def test_func_1():
 
 
 if __name__ == '__main__':
-    test_func_1()
+    # test_func_1()
+    pass
