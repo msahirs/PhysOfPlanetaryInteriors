@@ -79,8 +79,9 @@ class Celestial:
                      rho = None, r_range = None):
         
         if rho is not None:
-            M = np.cumsum(4*np.pi*rho*r_range**2 * np.append(np.diff(r_range),r_range[-1]))
-            return M
+            M = np.cumsum(4*np.pi*rho[:-1]*r_range[:-1]**2 * np.diff(r_range))
+            
+            return np.append(M,M[-1])
         
         surface_r = self.layers.values()[-1].r_bounds[1]
         return self.get_mass(surface_r)
@@ -91,8 +92,8 @@ class Celestial:
 
     def get_g(self, r,
               rho_g = None, r_range_g = None):
+        
         if rho_g is not None:
-            
             return UNI_GRAV * self.get_tot_mass(rho = rho_g,r_range = r_range_g) / r_range_g ** 2
 
         assert np.all(r >= 0), "distance is negative!"
@@ -105,8 +106,13 @@ class Celestial:
                     rho=None, r_range = None):
 
         if rho is not None:
-            pass
-
+           diff_r = np.diff(r_range)
+           ghost_r = diff_r[-1]
+           p_discrete = np.cumsum(rho * self.get_g(1,rho_g=rho,r_range_g=r_range) * \
+                np.append(diff_r,ghost_r))
+           
+           return p_discrete[::-1]
+           
         def p_func(r, t):
             return self._rho_func(r) * self.get_g(r)
 
@@ -126,22 +132,26 @@ class Celestial:
         #
         # return density
 
-    def _get_new_rho(self,steps,rho,alpha_t,p, K, T_dist):
+    def _get_new_rho(self,rho,alpha_t,p, K, T_dist):
         
         return rho * (1-alpha_t*np.diff(T_dist) * (1/K) * np.diff(p))
 
     def get_K(self,r_range, iterations):
+        converge = []
+        final_k = []
+        rho = np.array([self._rho_func(r) for r in r_range])
+        p = np.array(self.get_p_range(r_range[0],len(r_range)))
+        K = np.ones(len(r_range)) * 4E11 # Dummy K value
+        alpha_t = 3E-5 # Dummy Expansion coeff
         for i in range(iterations):
+            if i % 50 == 0:
+                print("Iteration at:", i, "of", iterations)
+            
 
-            K = np.ones(len(r_range)) * 4E11 # Dummy K value
-            alpha_t = 3E-5 # Dummy Expansion coeff
-
-            rho = np.array([self._rho_func(r) for r in r_range])
-            p = np.array(self.get_p_range(r_range[0],len(r_range)))
             T_dist = fdm_funcs.diffusion_1d_steady(0, 500, [self.top_bound],
                                                 [4], rho, [400], len(r_range))[1]
             
-            new_rho = self._get_new_rho(len(r_range),rho,alpha_t,
+            new_rho = self._get_new_rho(rho,alpha_t,
                                         np.append(p,p[-1]),
                                         K,
                                         np.append(T_dist,T_dist[-1]))
@@ -150,10 +160,12 @@ class Celestial:
             dp_drho = np.append(dp_drho,dp_drho[-1])
             
             K = rho * dp_drho
-            print(np.sum(new_rho))
+            # print(K)
             
-        return K
-
+            p = self.get_p_range(1,1,new_rho,r_range)
+            rho = new_rho
+            converge.append(np.sum(K)/np.max(K))
+        return K, converge
 
 # TESTS DEFINITION ##
 
@@ -161,7 +173,7 @@ def test_func_1():
     earth = Celestial(name="Earth")
 
     earth.add_layer("f1", InternalLayer_1D(0, 6378000 / 4,
-                                           "linear",
+                                           "constant",
                                            y_int=0, slope=5515 / (6378000 / 4 - 0),
                                            const_rho=5515,
                                            func=lambda x: 4 ** x))
@@ -185,7 +197,7 @@ def test_func_1():
     #                         func = lambda x: 4**x))
 
     # mmoi = earth.get_mmoi()
-    r_range = np.linspace(0.1, 6378000, 5000).tolist()
+    r_range = np.linspace(0.1, 6378000-1, 1000).tolist()
 
     # g_range = [earth.get_g(r) for r in r_range]
     # r_range_2 = np.linspace(6378000/2, 6378000, 1000).tolist()
@@ -201,13 +213,16 @@ def test_func_1():
     # # plt.plot(r_range_2,p_ran)
     # plt.show()
 
+    iter = 5000
+    K_vals,conv = earth.get_K(r_range,iter)
+    print(len(K_vals))
+    # plt.plot(r_range,earth.get_g(1,rho_range,r_range))
+    # plt.plot(r_range,earth.get_tot_mass(rho_range,r_range))
+    # plt.plot(r_range,earth.get_p_range(1,1,rho_range,r_range))
 
-    # K_vals = earth.get_K(r_range,10)
-    # print(len(K_vals))
-
-    plt.plot(r_range,earth.get_g(1,rho_range,r_range))
-
-    # plt.plot(r_range,K_vals)
+    plt.plot(r_range,K_vals)
+    plt.show()
+    plt.plot([i for i in range(iter)], conv)
     plt.show()
 
 if __name__ == '__main__':
