@@ -137,18 +137,20 @@ class Celestial:
         return rho * (1-alpha_t*np.diff(T_dist) * (1/K) * np.diff(p))
 
     def get_K(self,r_range, iterations):
-        converge = []
+        prev_converge = 0
         final_k = []
+        conv = []
         rho = np.array([self._rho_func(r) for r in r_range])
         p = np.array(self.get_p_range(r_range[0],len(r_range)))
         K = np.ones(len(r_range)) * 4E11 # Dummy K value
         alpha_t = 3E-5 # Dummy Expansion coeff
+
         for i in range(iterations):
-            if i % 50 == 0:
+            if i % 5 == 0:
                 print("Iteration at:", i, "of", iterations)
             
 
-            T_dist = fdm_funcs.diffusion_1d_steady(0, 500, [self.top_bound],
+            T_dist = fdm_funcs.diffusion_1d_steady(15, 3500, [self.top_bound],
                                                 [4], rho, [400], len(r_range))[1]
             
             new_rho = self._get_new_rho(rho,alpha_t,
@@ -159,13 +161,14 @@ class Celestial:
             dp_drho = np.diff(p)/np.diff(new_rho)
             dp_drho = np.append(dp_drho,dp_drho[-1])
             
-            K = rho * dp_drho
-            # print(K)
+            K = new_rho * dp_drho
+            
             
             p = self.get_p_range(1,1,new_rho,r_range)
             rho = new_rho
-            converge.append(np.sum(K)/np.max(K))
-        return K, converge
+            conv.append(prev_converge / K[100])
+            prev_converge = K[100]
+        return K, conv
 
 # TESTS DEFINITION ##
 
@@ -197,7 +200,7 @@ def test_func_1():
     #                         func = lambda x: 4**x))
 
     # mmoi = earth.get_mmoi()
-    r_range = np.linspace(0.1, 6378000-1, 1000).tolist()
+    r_range = np.linspace(0.1, 6378000-1, 5000).tolist()
 
     # g_range = [earth.get_g(r) for r in r_range]
     # r_range_2 = np.linspace(6378000/2, 6378000, 1000).tolist()
@@ -213,7 +216,7 @@ def test_func_1():
     # # plt.plot(r_range_2,p_ran)
     # plt.show()
 
-    iter = 5000
+    iter = 20
     K_vals,conv = earth.get_K(r_range,iter)
     print(len(K_vals))
     # plt.plot(r_range,earth.get_g(1,rho_range,r_range))
