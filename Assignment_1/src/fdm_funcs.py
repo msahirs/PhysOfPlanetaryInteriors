@@ -10,7 +10,7 @@ speed and reduce computational complexity - in case of iterative usage
 """
 
 
-def diffusion_1d_steady(T_start, T_end, kappa, rho, x_grid, ):
+def diffusion_1d_steady(T, kappa, rho, x_grid, ):
     """`diffusion_1d_steady(...)` is used to calculate the 1D
     Poisson (Heat) equation at steady state.
 
@@ -22,10 +22,8 @@ def diffusion_1d_steady(T_start, T_end, kappa, rho, x_grid, ):
 
     Parameters
     ----------
-    `T_start` : float
-        Fixed Temperature at start of medium
-    `T_end` : float
-        Fixed Temperature at end of medium
+    `T` : tuple
+        Fixed Temperature at core and outer of medium
     `L` : list
         radii of all layers
     `k` : list
@@ -71,8 +69,8 @@ def diffusion_1d_steady(T_start, T_end, kappa, rho, x_grid, ):
     # plt.show()
 
     # Set up conditions of b vector for adiabatic boundary
-    b[0] = T_start
-    b[-1] = T_end
+    b[0] = T[0]
+    b[-1] = T[1]
 
     # Making any element, except 0 and -1, non-zero represents an input
     # heat flux. This can be used to add sources/sinks to the poisson equation
@@ -90,7 +88,7 @@ def test_func_1():
     steps = 100
     L = (900, 1400, 1900)
     x_grid = np.linspace(0, max(L), steps)
-    x, y = diffusion_1d_steady(T_start=15, T_end=3700, L=L, k=(6, 5, 3), rho=np.ones(steps),
+    x, y = diffusion_1d_steady(T=(15, 3700), L=L, k=(6, 5, 3), rho=np.ones(steps),
                                Cp=(570, 600, 400), x_grid=x_grid)
 
     plt.plot(x, y)
