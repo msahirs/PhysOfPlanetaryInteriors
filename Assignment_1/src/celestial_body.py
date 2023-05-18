@@ -65,9 +65,9 @@ class Celestial:
 
     def _rho_func(self, r):
 
-        for l in self.layers:
-            if l.r_bounds[0] < r <= l.r_bounds[1]:
-                return l.get_rho(r)
+        for _ in self.layers:
+            if _.r_bounds[0] < r <= _.r_bounds[1]:
+                return _.get_rho(r)
 
         return 0
 
@@ -75,15 +75,26 @@ class Celestial:
         self.layers.append(layer)
         self.top_bound = layer.r_bounds[1]
 
-    def get_tot_mass(self):
-        surface_r = self.layers[-1].r_bounds[1]
+    def get_tot_mass(self,
+                     rho = None, r_range = None):
+
+        if rho is not None:
+            M = np.cumsum(4*np.pi*rho[:-1]*r_range[:-1]**2 * np.diff(r_range))
+
+            return np.append(M,M[-1])
+
+        surface_r = self.layers.values()[-1].r_bounds[1]
         return self.get_mass(surface_r)
 
-    def get_mass(self, r):
+    def get_mass(self, r,):
         assert np.all(r >= 0), "distance is negative!"
         return np.sum([_.get_mass(r) for _ in self.layers])
 
-    def get_g(self, r):
+    def get_g(self, r,
+              rho_g = None, r_range_g = None):
+
+        if rho_g is not None:
+            return UNI_GRAV * self.get_tot_mass(rho = rho_g,r_range = r_range_g) / r_range_g ** 2
 
         assert np.all(r >= 0), "distance is negative!"
         return UNI_GRAV * self.get_mass(r) / r ** 2
@@ -91,17 +102,23 @@ class Celestial:
     def get_mmoi(self):
         return np.sum([_.get_mmoi() for _ in self.layers])
 
-    def get_p_range(self, steps, rho, r_probe=1e-7):
-        # pressure from r_surface to r_probe
-        def p_func(r, t, i):
-            return rho[i] * self.get_g(r)
+    def get_p_range(self, r_probe, steps,
+                    rho=None, r_range = None):
 
-        p_range = f_euler(p_func, r_probe, self.top_bound, 0, steps)
+        if rho is not None:
+           diff_r = np.diff(r_range)
+           ghost_r = diff_r[-1]
+           p_discrete = np.cumsum(rho * self.get_g(1,rho_g=rho,r_range_g=r_range) * \
+                np.append(diff_r,ghost_r))
 
-        return np.array(p_range[::-1])
+           return p_discrete[::-1]
 
-    def get_radius(self):
-        return [_.r_bounds[1] for _ in self.layers]
+        def p_func(r, t):
+            return self._rho_func(r) * self.get_g(r)
+
+        p_range = f_euler(p_func, r_probe, 0, self.top_bound, steps)
+
+        return p_range[::-1]
 
     def get_Cp(self):
         return [_.cp for _ in self.layers]
@@ -166,14 +183,51 @@ class Celestial:
 
         return x_grid, np.array(rho)
 
+    def _get_new_rho(self,rho,alpha_t,p, K, T_dist):
+
+        return rho * (1-alpha_t*np.diff(T_dist) * (1/K) * np.diff(p))
+
+    def get_K(self,r_range, iterations):
+        prev_converge = 0
+        final_k = []
+        conv = []
+        rho = np.array([self._rho_func(r) for r in r_range])
+        p = np.array(self.get_p_range(r_range[0],len(r_range)))
+        K = np.ones(len(r_range)) * 4E11 # Dummy K value
+        alpha_t = 3E-5 # Dummy Expansion coeff
+
+        for i in range(iterations):
+            if i % 5 == 0:
+                print("Iteration at:", i, "of", iterations)
+
+
+            T_dist = fdm_funcs.diffusion_1d_steady(15, 3500, [self.top_bound],
+                                                [4], rho, [400], len(r_range))[1]
+
+            new_rho = self._get_new_rho(rho,alpha_t,
+                                        np.append(p,p[-1]),
+                                        K,
+                                        np.append(T_dist,T_dist[-1]))
+
+            dp_drho = np.diff(p)/np.diff(new_rho)
+            dp_drho = np.append(dp_drho,dp_drho[-1])
+
+            K = new_rho * dp_drho
+
+
+            p = self.get_p_range(1,1,new_rho,r_range)
+            rho = new_rho
+            conv.append(prev_converge / K[100])
+            prev_converge = K[100]
+        return K, conv
 
 # TESTS DEFINITION ##
 
 def test_func_1():
-    earth = Celestial(name="ganymede")
+    earth = Celestial(name="Earth")
 
     earth.add_layer("f1", InternalLayer_1D(0, 6378000 / 4,
-                                           "linear",
+                                           "constant",
                                            y_int=0, slope=5515 / (6378000 / 4 - 0),
                                            const_rho=5515,
                                            func=lambda x: 4 ** x))
@@ -185,32 +239,44 @@ def test_func_1():
                                            func=lambda x: 4 ** x))
 
     earth.add_layer("f3", InternalLayer_1D(6378000 / 2, 6378000,
-                                           "linear",
+                                           "constant",
                                            y_int=5515, slope=5515 / (6378000 - 6378000 / 2),
                                            const_rho=5515,
                                            func=lambda x: 4 ** x))
 
-    # ganymede.add_layer("f2", InternalLayer_1D(6378000/2, 6378000,
+    # earth.add_layer("f2", InternalLayer_1D(6378000/2, 6378000,
     #                         "linear",
     #                         y_int = 5515, slope = 0.001,
     #                         const_rho = 3000,
     #                         func = lambda x: 4**x))
 
-    # mmoi = ganymede.get_mmoi()
-    r_range = np.linspace(0.1, 6378000, 10000).tolist()
+    # mmoi = earth.get_mmoi()
+    r_range = np.linspace(0.1, 6378000-1, 5000).tolist()
 
-    # g_range = [ganymede.get_g(r) for r in r_range]
-    r_range_2 = np.linspace(0.1, 6378000, 1000).tolist()
-    p_ran = earth.get_p_range(0.1, 1000)
+    # g_range = [earth.get_g(r) for r in r_range]
+    # r_range_2 = np.linspace(6378000/2, 6378000, 1000).tolist()
+    # p_ran = earth.get_p_range(6378000/2, 1000)
 
-    # rho_range = [ganymede._rho_func(r) for r in r_range]
-
-    # mass_range = [ganymede.get_mass(r) for r in r_range]
+    rho_range = np.array([earth._rho_func(r) for r in r_range])
+    r_range = np.array(r_range)
+    # mass_range = [earth.get_mass(r) for r in r_range]
     # plt.plot(r_range,rho_range)
 
-    # print("mmoi factor:", mmoi/(mass_range[-1] * ganymede.top_bound**2))
-    plt.plot(r_range_2, p_ran)
-    # plt.plot(r_range_2,p_ran)
+    # print("mmoi factor:", mmoi/(mass_range[-1] * earth.top_bound**2))
+    # plt.plot(r_range_2, p_ran)
+    # # plt.plot(r_range_2,p_ran)
+    # plt.show()
+
+    iter = 20
+    K_vals,conv = earth.get_K(r_range,iter)
+    print(len(K_vals))
+    # plt.plot(r_range,earth.get_g(1,rho_range,r_range))
+    # plt.plot(r_range,earth.get_tot_mass(rho_range,r_range))
+    # plt.plot(r_range,earth.get_p_range(1,1,rho_range,r_range))
+
+    plt.plot(r_range,K_vals)
+    plt.show()
+    plt.plot([i for i in range(iter)], conv)
     plt.show()
 
 
