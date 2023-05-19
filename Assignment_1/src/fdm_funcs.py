@@ -47,7 +47,7 @@ def diffusion_1d_steady(T, kappa, rho, x_grid, ):
     x_steps = len(x_grid)
 
     # Calculation of Diffusion Coefficient (see description links)
-    kappa *= rho
+    kappa /= rho
 
     # Compute length of discrete element
     dx = 1 / x_steps
@@ -89,8 +89,15 @@ def test_func_1():
     steps = 100
     L = (900, 1400, 1900)
     x_grid = np.linspace(0, max(L), steps)
-    x, y = diffusion_1d_steady(T=(15, 3700), L=L, k=(6, 5, 3), rho=np.ones(steps),
-                               Cp=(570, 600, 400), x_grid=x_grid)
+    k = [4,3,2]
+    Cp = [800, 1149, 1588]
+    kappa = np.zeros(steps)
+    for idx, length in enumerate(L):
+        if idx:
+            kappa[np.bitwise_and(L[idx - 1] < x_grid, x_grid <= length)] = k[idx] / Cp[idx]
+        else:
+            kappa[x_grid <= length] = k[idx] / Cp[idx]
+    x, y = diffusion_1d_steady(T=(1980, 200), kappa=kappa, rho=np.ones(steps)*6000, x_grid=x_grid)
 
     plt.plot(x, y)
     plt.xlabel("Length along medium [m]")
@@ -100,5 +107,4 @@ def test_func_1():
 
 
 if __name__ == '__main__':
-    # test_func_1()
-    pass
+    test_func_1()

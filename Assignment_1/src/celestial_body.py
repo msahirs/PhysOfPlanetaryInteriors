@@ -112,8 +112,9 @@ class Celestial:
 
         if rho is not None:
             diff_r = np.diff(r_range)
-            p_discrete = np.cumsum(rho * self.get_g(1, rho_g=rho, r_range_g=r_range) * \
-                                   np.append(diff_r, diff_r[-1]))
+            dp = rho * self.get_g(1, rho_g=rho, r_range_g=r_range) * \
+                                   np.append(diff_r, diff_r[-1])
+            p_discrete = np.cumsum(dp[::-1])
 
             return p_discrete[::-1]
 
@@ -123,6 +124,11 @@ class Celestial:
         p_range = f_euler(p_func, r_probe, 0, self.top_bound, steps)
 
         return p_range[::-1]
+
+    def get_dp_drho(self, r, rho):
+        diff_r = np.diff(rho)
+        return np.cumsum(r * self.get_g(1, rho_g=rho, r_range_g=r) * \
+                                   np.append(diff_r, diff_r[-1]))[::-1]
 
     def get_radii(self):
         return [_.r_bounds[1] for _ in self.layers]
@@ -137,9 +143,10 @@ class Celestial:
         return np.array([self._rho_func(r) for r in x_grid])
 
     def _get_new_rho(self, rho, p, K, t, alpha_t=3E-5):
-        dp = np.diff(p)
-        dt = np.diff(t)
-        return rho * (1 - alpha_t * np.append(dt, dt[-1]) + (1 / K) + np.append(dp, dp[-1]))
+        return rho * (1 - alpha_t * np.diff(t, append=1e-5) + 1 / K * np.diff(p, append=1e-5))
+
+    def get_rayleigh(self, rho, alpha, g, delta_t, d, kappa, nu):
+        return rho * alpha * g * delta_t * d **3 / kappa / nu
 
     def run_convergence(self, initial_rho, initial_Ks, r_range, max_iterations, T=(15, 3500), epsilon=1e-5):
 
@@ -170,9 +177,14 @@ class Celestial:
                 initial_rhos[r_range <= length] = initial_rho[idx]
 
         # get initial rho, p, and k
+        # core to ice
         rho = [self.get_rhos(x_grid=r_range)]
+        # core to ice
         K = [K]
+        # core to ice
         p = [np.array(self.get_p_range(r_range[0], steps))]
+
+        #ts = [diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range)[1]]
 
         for i in range(max_iterations):
             if i % 5 == 0:
@@ -180,13 +192,13 @@ class Celestial:
 
             _, t = diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range)
 
-            new_rho = self._get_new_rho(rho[-1], p[-1], K[-1], t)
-            rho.append(new_rho)
+            #rho.append(self._get_new_rho(rho=rho[-1], K=.862e+11, t=t - 288.15, p=p[-1] - 101325))
+            rho.append(self._get_new_rho(rho=rho[-1], K=.862e+11, t=t, p=p[-1]))
 
-            dp_drho = np.diff(p[-1]) / np.diff(rho[-1])
-            dp_drho = np.append(dp_drho, dp_drho[-1])
+            #dp_drho = np.diff(p[-1]) / np.diff(rho[-1])
+            #dp_drho = np.append(dp_drho, dp_drho[-1])
 
-            K.append(rho[-1] * dp_drho)
+            #K.append(K[-1])#rho[-1] * dp_drho)
 
             p.append(self.get_p_range(1, 1, rho[-1], r_range))
 
@@ -197,15 +209,15 @@ class Celestial:
 
 
 def convergence_criteria(K: list, p: list, rho: list, epsilon):
-    if any(abs(K[-1] - K[-2]) > epsilon):
-        return False
-    print("K has converged")
+    # if any(1 - abs(K[-1] / K[-2]) > epsilon):
+    #     return False
+    # print("K has converged")
 
-    if any(abs(p[-1] - p[-2]) > epsilon):
+    if any(1 - abs(p[-1] / p[-2]) > epsilon):
         return False
     print("p has converged")
 
-    if any(abs(rho[-1] - rho[-2]) > epsilon):
+    if any(1 - abs(rho[-1] / rho[-2]) > epsilon):
         return False
     print("rho has converged")
 
@@ -306,7 +318,7 @@ def test_func_2():
     r_range = np.linspace(0.1, 2634 - 1, 5000)
     K, p, rho = ganymede.run_convergence(initial_rho=initial_rhos, initial_Ks=initial_Ks, T=(1980, T_ice),
                                          r_range=r_range,
-                                         max_iterations=10000, epsilon=1e-5)
+                                         max_iterations=100, epsilon=1e-5)
 
     plt.figure()
     plt.subplot(311)
