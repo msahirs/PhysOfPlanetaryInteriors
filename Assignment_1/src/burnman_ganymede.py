@@ -7,7 +7,7 @@ from burnman import Mineral, PerplexMaterial, Composite, Layer, Planet
 from burnman import minerals
 
 # Compositions from midpoints of Hirose et al. (2021), ignoring carbon and hydrogen
-inner_core_composition = Composition({'Fe': 75.4, 'Ni': 9., 'Si': 10.55, 'O': 5.05}, 'weight')
+inner_core_composition = Composition({'Fe': 73.4, 'Ni': 9., 'Si': 12.55, 'O': 5.05}, 'weight')
 outer_core_composition = Composition({'Fe': 90., 'Ni': 5., 'Si': 2., 'O': 3.}, 'weight')
 
 
@@ -19,7 +19,7 @@ outer_core_elemental_composition = dict(outer_core_composition.atomic_compositio
 inner_core_molar_mass = formula_mass(inner_core_elemental_composition)
 outer_core_molar_mass = formula_mass(outer_core_elemental_composition)
 
-icb_radius = 400.e3
+icb_radius = 800.e3
 inner_core = Layer('inner core', radii=np.linspace(0., icb_radius, 50))
 
 hcp_iron = minerals.SE_2015.hcp_iron()
@@ -28,45 +28,43 @@ params = hcp_iron.params
 params['name'] = 'modified solid iron'
 params['formula'] = inner_core_elemental_composition
 params['molar_mass'] = inner_core_molar_mass
-delta_V = 2.0e-7
 
 inner_core_material = Mineral(params=params,
                               )
-
+olivine_iron = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.8,0.2])
 # check that the new inner core material does what we expect:
-hcp_iron.set_state(5.8e9, 2000.)
+olivine_iron.set_state(5.8e9, 2000.)
 inner_core_material.set_state(5.8e9, 2000.)
 
 
-inner_core.set_material(inner_core_material)
+inner_core.set_material(olivine_iron)
 
-inner_core.set_temperature_mode('adiabatic',temperature_top=2000)
+inner_core.set_temperature_mode('adiabatic',temperature_top=1800)
 
-cmb_radius = 1800.e3
-outer_core = Layer('outer core', radii=np.linspace(icb_radius, cmb_radius, 50))
+cmb_radius = 1500.e3
+outer_core = Layer('outer core', radii=np.linspace(icb_radius, cmb_radius, 150))
 
 
-olivine = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.6,0.4])
+olivine = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.2,0.8])
 outer_core.set_material(olivine)
 
-outer_core.set_temperature_mode('adiabatic',temperature_top=273)
+outer_core.set_temperature_mode('adiabatic',temperature_top=1800)
 
 
 
 from burnman import BoundaryLayerPerturbation
 
-lab_radius = 2400.e3 # 200 km thick lithosphere
-lab_temperature = 1350.
+lab_radius = 2000.e3 # 200 km thick lithosphere
+# lab_temperature = 1350.
 
-convecting_mantle_radii = np.linspace(cmb_radius, lab_radius, 101)
+convecting_mantle_radii = np.linspace(cmb_radius, lab_radius, 50)
 convecting_mantle = Layer('convecting mantle', radii=convecting_mantle_radii)
 
 # Import a low resolution PerpleX data table.
 
-olivine = minerals.SLB_2011.orthopyroxene(molar_fractions=[0.1,0.1,0.7,0.1])
-olivine_water = Composite([olivine,minerals.HP_2011_ds62.h2oL()],fractions=[0.1,0.9])
-convecting_mantle.set_material(olivine_water)
-
+pyroxene = minerals.SLB_2011.orthopyroxene(molar_fractions=[0.2,0.2,0.5,0.1])
+pyroxene_water = Composite([pyroxene,minerals.HP_2011_ds62.h2oL()],fractions=[0.15,0.85])
+convecting_mantle.set_material(pyroxene_water)
 # Here we add a thermal boundary layer perturbation, assuming that the
 # lower mantle has a Rayleigh number of 1.e7, and that the basal thermal
 # boundary layer has a temperature jump of 840 K and the top
@@ -74,8 +72,8 @@ convecting_mantle.set_material(olivine_water)
 tbl_perturbation = BoundaryLayerPerturbation(radius_bottom=cmb_radius,
                                              radius_top=lab_radius,
                                              rayleigh_number=1.e5,
-                                             temperature_change=1300.,
-                                             boundary_layer_ratio=60./900.)
+                                             temperature_change=400.,
+                                             boundary_layer_ratio=100/900.)
 
 
 convecting_mantle.set_temperature_mode('perturbed-adiabatic',
@@ -83,17 +81,19 @@ convecting_mantle.set_temperature_mode('perturbed-adiabatic',
 
 
 
-planet_radius = 2634.e3
-surface_temperature = 100.
+planet_radius = 2600.e3
+surface_temperature = 600.
 water = minerals.HP_2011_ds62.h2oL()
-crust = Layer('crust', radii=np.linspace(lab_radius, planet_radius, 120))
+water.set_state(1000000, 273+20.)
+crust = Layer('crust', radii=np.linspace(lab_radius, planet_radius, 50))
 crust.set_material(water)
-crust.set_temperature_mode(temperature_mode='adiabatic',temperature_top=273)
-
-planet_zog = Planet('Planet Zog',
+crust.set_temperature_mode(temperature_mode='adiabatic',temperature_top=surface_temperature)
+# crust.set_pressure_mode(pressure_mode='self-consistent',pressure_top=0,gravity_bottom=1.428)
+planet_zog = Planet('Ganymede',
                     [inner_core, outer_core ,
                      convecting_mantle,
                      crust], verbose=True)
+
 planet_zog.make()
 
 earth_mass = 1482e20
