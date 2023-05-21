@@ -19,7 +19,7 @@ outer_core_elemental_composition = dict(outer_core_composition.atomic_compositio
 inner_core_molar_mass = formula_mass(inner_core_elemental_composition)
 outer_core_molar_mass = formula_mass(outer_core_elemental_composition)
 
-icb_radius = 800.e3
+icb_radius = 500.e3
 inner_core = Layer('inner core', radii=np.linspace(0., icb_radius, 50))
 
 hcp_iron = minerals.SE_2015.hcp_iron()
@@ -31,48 +31,44 @@ params['molar_mass'] = inner_core_molar_mass
 
 inner_core_material = Mineral(params=params,
                               )
-olivine_iron = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.8,0.2])
-# check that the new inner core material does what we expect:
-olivine_iron.set_state(5.8e9, 2000.)
+olivine_iron = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.5,0.5])
+
+hcp_iron.set_state(5.8e9, 2000.)
 inner_core_material.set_state(5.8e9, 2000.)
 
 
-inner_core.set_material(olivine_iron)
+inner_core.set_material(inner_core_material)
 
-inner_core.set_temperature_mode('adiabatic',temperature_top=1800)
+inner_core.set_temperature_mode('adiabatic',temperature_top=2000)
 
-cmb_radius = 1500.e3
-outer_core = Layer('outer core', radii=np.linspace(icb_radius, cmb_radius, 150))
+cmb_radius = 1900.e3
+water = minerals.HP_2011_ds62.h2oL()
+outer_core = Layer('outer core', radii=np.linspace(icb_radius, cmb_radius, 100))
 
 
-olivine = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.2,0.8])
+olivine = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.8,0.2])
+# olivine_plus_water = Composite([olivine,water],fractions=[0.6,0.4])
 outer_core.set_material(olivine)
 
 outer_core.set_temperature_mode('adiabatic',temperature_top=1800)
 
 
-
 from burnman import BoundaryLayerPerturbation
 
-lab_radius = 2000.e3 # 200 km thick lithosphere
+lab_radius = 2450.e3 
 # lab_temperature = 1350.
 
-convecting_mantle_radii = np.linspace(cmb_radius, lab_radius, 50)
+convecting_mantle_radii = np.linspace(cmb_radius, lab_radius, 100)
 convecting_mantle = Layer('convecting mantle', radii=convecting_mantle_radii)
 
-# Import a low resolution PerpleX data table.
+pyroxene = minerals.SLB_2011.orthopyroxene(molar_fractions=[0.1,0.3,0.3,0.3])
+olivine_water = Composite([olivine,water],fractions=[0.1,0.9])
+convecting_mantle.set_material(olivine_water)
 
-pyroxene = minerals.SLB_2011.orthopyroxene(molar_fractions=[0.2,0.2,0.5,0.1])
-pyroxene_water = Composite([pyroxene,minerals.HP_2011_ds62.h2oL()],fractions=[0.15,0.85])
-convecting_mantle.set_material(pyroxene_water)
-# Here we add a thermal boundary layer perturbation, assuming that the
-# lower mantle has a Rayleigh number of 1.e7, and that the basal thermal
-# boundary layer has a temperature jump of 840 K and the top
-# boundary layer has a temperature jump of 60 K.
 tbl_perturbation = BoundaryLayerPerturbation(radius_bottom=cmb_radius,
                                              radius_top=lab_radius,
-                                             rayleigh_number=1.e5,
-                                             temperature_change=400.,
+                                             rayleigh_number=1.e8,
+                                             temperature_change=1500.,
                                              boundary_layer_ratio=100/900.)
 
 
@@ -80,13 +76,14 @@ convecting_mantle.set_temperature_mode('perturbed-adiabatic',
                                        temperatures=tbl_perturbation.temperature(convecting_mantle_radii))
 
 
-
 planet_radius = 2600.e3
-surface_temperature = 600.
-water = minerals.HP_2011_ds62.h2oL()
-water.set_state(1000000, 273+20.)
+surface_temperature = 700.
+
 crust = Layer('crust', radii=np.linspace(lab_radius, planet_radius, 50))
-crust.set_material(water)
+
+crust_ice_pyroxene = Composite([pyroxene,water],fractions=[0.01,0.99])
+
+crust.set_material(crust_ice_pyroxene)
 crust.set_temperature_mode(temperature_mode='adiabatic',temperature_top=surface_temperature)
 # crust.set_pressure_mode(pressure_mode='self-consistent',pressure_top=0,gravity_bottom=1.428)
 planet_zog = Planet('Ganymede',
@@ -107,8 +104,6 @@ print('Layer mass fractions:')
 for layer in planet_zog.layers:
     print(f'{layer.name}: {layer.mass / planet_zog.mass:.3f}')
 
-
-# Now we delete the newly-created files. If you want them, comment out these lines.
 
 fig = plt.figure(figsize=(8, 5))
 ax = [fig.add_subplot(2, 2, i) for i in range(1, 5)]
@@ -145,20 +140,6 @@ ax[3].plot(planet_zog.radii / 1.e3, planet_zog.temperature)
 ax[3].set_ylabel('Temperature (K)')
 ax[3].set_xlabel('Radius (km)')
 ax[3].set_ylim(0.,)
-
-# Finally, let's overlay some geotherms onto our model
-# geotherm
-labels = ['Stacey (1977)',
-          'Brown and Shankland (1981)',
-          'Anderson (1982)',
-          'Alfe et al. (2007)',
-          'Anzellini et al. (2013)']
-
-short_labels = ['S1977',
-                'BS1981',
-                'A1982',
-                'A2007',
-                'A2013']
 
 
 for i in range(2):
