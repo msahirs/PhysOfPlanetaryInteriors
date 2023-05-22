@@ -226,7 +226,11 @@ class Celestial:
             if convergence_criteria([K, p, rho], epsilon):
                 break
 
-        return K, p, rho, Ts
+        mmoi = self.get_mmoi()
+        m = self.get_tot_mass(rho=rho[-1], r_range=r_range)
+        g = self.get_g(1, rho_g=rho[-1], r_range_g=r_range)
+
+        return K, p, rho, Ts, mmoi, m, g
 
 
 # TESTS DEFINITION ##
@@ -327,37 +331,66 @@ def test_func_2():
     initial_rhos = (6000, 2800, 1000)  # our sheet
     initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
     r_range = np.linspace(0.1, 2631000 - 1, 5000)
-    K, p, rho, T = ganymede.run_convergence(initial_Ks=initial_Ks, T=(1980, T_ice),
+    K, p, rho, T, mmoi, m, g = ganymede.run_convergence(initial_Ks=initial_Ks, T=(1980, T_ice),
                                             r_range=r_range,
                                             max_iterations=100, epsilon=1e-5)
 
     plt.figure()
-    plt.subplot(221)
-    plt.plot(K[-1])
-    plt.plot(K[-2])
-    plt.plot(K[-3])
+    ax = plt.subplot(321)
+    plt.plot(r_range, K[-1])
+    plt.plot(r_range, K[-2])
+    plt.plot(r_range, K[-3])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Bulk Modulus")
 
-    plt.subplot(222)
-    plt.plot(p[-1])
-    plt.plot(p[-2])
-    plt.plot(p[-3])
+    ax = plt.subplot(322)
+    plt.plot(r_range, p[-1])
+    plt.plot(r_range, p[-2])
+    plt.plot(r_range, p[-3])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Pressure")
 
-    plt.subplot(223)
-    plt.plot(rho[-1])
-    plt.plot(rho[-2])
-    plt.plot(rho[-3])
+    ax = plt.subplot(323)
+    plt.plot(r_range, rho[-1])
+    plt.plot(r_range, rho[-2])
+    plt.plot(r_range, rho[-3])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Density")
 
-    plt.subplot(224)
-    plt.plot(T[-1])
-    plt.plot(T[-2])
-    plt.plot(T[-3])
+    ax = plt.subplot(324)
+    plt.plot(r_range, T[-1])
+    plt.plot(r_range, T[-2])
+    plt.plot(r_range, T[-3])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Temperature")
+    plt.legend(["98 iteration", "99 Iteration", "100 Iteration"])
+
+    ax = plt.subplot(325)
+    plt.plot(r_range, g)
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Gravity")
+
+    ax = plt.subplot(326)
+    plt.plot(r_range, m)
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Mass")
+
     plt.tight_layout()
     plt.show()
 
+    print("MMOI: {}".format(mmoi))
 
 if __name__ == '__main__':
     # TEST RUNNING #
