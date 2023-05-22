@@ -43,7 +43,7 @@ inner_core.set_temperature_mode('adiabatic',temperature_top=2000)
 
 cmb_radius = 1900.e3
 water = minerals.HP_2011_ds62.h2oL()
-outer_core = Layer('outer core', radii=np.linspace(icb_radius, cmb_radius, 100))
+outer_core = Layer('mantle', radii=np.linspace(icb_radius, cmb_radius, 100))
 
 
 olivine = minerals.SLB_2011.mg_fe_olivine(molar_fractions=[0.8,0.2])
@@ -55,11 +55,11 @@ outer_core.set_temperature_mode('adiabatic',temperature_top=1800)
 
 from burnman import BoundaryLayerPerturbation
 
-lab_radius = 2450.e3 
+lab_radius = 2150.e3 
 # lab_temperature = 1350.
 
 convecting_mantle_radii = np.linspace(cmb_radius, lab_radius, 100)
-convecting_mantle = Layer('convecting mantle', radii=convecting_mantle_radii)
+convecting_mantle = Layer('ocean', radii=convecting_mantle_radii)
 
 pyroxene = minerals.SLB_2011.orthopyroxene(molar_fractions=[0.1,0.3,0.3,0.3])
 olivine_water = Composite([olivine,water],fractions=[0.1,0.9])
@@ -77,7 +77,7 @@ convecting_mantle.set_temperature_mode('perturbed-adiabatic',
 
 
 planet_radius = 2600.e3
-surface_temperature = 700.
+surface_temperature = 1000.
 
 crust = Layer('crust', radii=np.linspace(lab_radius, planet_radius, 50))
 
