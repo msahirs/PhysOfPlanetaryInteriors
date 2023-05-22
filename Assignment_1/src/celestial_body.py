@@ -11,11 +11,6 @@ from utils import convergence_criteria, get_mask, apply_mask
 UNI_GRAV = 6.6743015E-11
 
 
-# TODO visualization, test convergence, matrix supports convection
-# TODO write report
-# TODO Burnman tutorial
-
-
 def rk4(dydx, x0, y0, x_f, steps):
     # Count number of iterations using step size or
     # step height h
@@ -233,6 +228,95 @@ class Celestial:
         return K, p, rho, Ts, mmoi, m, g
 
 
+def run_test(rho, alpha, T, name):
+    ganymede = Celestial(name=name, layers=[])
+
+    ganymede.add_layer("Core", InternalLayer_1D(-1, 651000,
+                                                rho_type="constant",
+                                                y_int=0, slope=5515 / (6378000 / 4 - 0),
+                                                const_rho=rho,
+                                                func=lambda x: 4 ** x,
+                                                cp=800,
+                                                k=4,
+                                                nu=2.6e-3,
+                                                alpha=alpha))  # citation needed
+
+    ganymede.add_layer("Mantle", InternalLayer_1D(651000, 1982000,
+                                                  rho_type="constant",
+                                                  y_int=0, slope=5515 / (6378000 - 6378000 * 0.9999),
+                                                  const_rho=3100,
+                                                  func=lambda x: 4 ** x,
+                                                  cp=1149,
+                                                  k=4,
+                                                  nu=10e19,
+                                                  alpha=3e-5))
+
+    T_ice = 200  # reference: https://solarsystem.nasa.gov/moons/jupiter-moons/ganymede/in-depth/
+    cp_ice = 7.49 * T_ice + 90  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4/pdf
+    k_ice = 567 / T_ice  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4#psjabcbf4s4
+    ganymede.add_layer("Ice", InternalLayer_1D(1982000, 2631000,
+                                               rho_type="constant",
+                                               y_int=5515, slope=5515 / (6378000 - 6378000 / 2),
+                                               const_rho=1000,
+                                               func=lambda x: 4 ** x,
+                                               cp=cp_ice,
+                                               k=k_ice,
+                                               nu=10e12,
+                                               alpha=30e-6))
+
+    initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
+    r_range = np.linspace(0.1, 2631000 - 1, 5000)
+    return ganymede.run_convergence(initial_Ks=initial_Ks,
+                                    T=(T, T_ice),
+                                    r_range=r_range,
+                                    max_iterations=100,
+                                    epsilon=1e-5)
+
+
+def run_test2(alpha, T, name):
+    ganymede = Celestial(name=name, layers=[])
+
+    ganymede.add_layer("Core", InternalLayer_1D(-1, 700000,
+                                                rho_type="constant",
+                                                y_int=0, slope=5515 / (6378000 / 4 - 0),
+                                                const_rho=6500,
+                                                func=lambda x: 4 ** x,
+                                                cp=800,
+                                                k=32,
+                                                nu=2.6e-3,
+                                                alpha=alpha))  # citation needed
+
+    ganymede.add_layer("Mantle", InternalLayer_1D(700000, 1720000,
+                                                  rho_type="constant",
+                                                  y_int=0, slope=5515 / (6378000 - 6378000 * 0.9999),
+                                                  const_rho=3300,
+                                                  func=lambda x: 4 ** x,
+                                                  cp=1149,
+                                                  k=3.5,
+                                                  nu=10e19,
+                                                  alpha=3e-5))
+
+    T_ice = 100  # reference: https://solarsystem.nasa.gov/moons/jupiter-moons/ganymede/in-depth/
+    k_ice = 567 / T_ice  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4#psjabcbf4s4
+    ganymede.add_layer("Ice", InternalLayer_1D(1720000, 2634000,
+                                               rho_type="constant",
+                                               y_int=5515, slope=5515 / (6378000 - 6378000 / 2),
+                                               const_rho=1200,
+                                               func=lambda x: 4 ** x,
+                                               cp=1800,
+                                               k=k_ice,
+                                               nu=10e12,
+                                               alpha=30e-6))
+
+    initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
+    r_range = np.linspace(0.1, 2631000 - 1, 5000)
+    return ganymede.run_convergence(initial_Ks=initial_Ks,
+                                    T=(T, T_ice),
+                                    r_range=r_range,
+                                    max_iterations=100,
+                                    epsilon=1e-5)
+
+
 # TESTS DEFINITION ##
 
 def test_func_1():
@@ -293,105 +377,128 @@ def test_func_1():
 
 
 def test_func_2():
-    ganymede = Celestial(name="Ganymede")
+    # TEST RUNNING #
+    K_fe, p_fe, rho_fe, T_fe, mmoi_fe, m_fe, g_fe = run_test(rho=7020, alpha=9.2e-5, T=1325, name="name")
 
-    ganymede.add_layer("Core", InternalLayer_1D(-1, 651000,
-                                                rho_type="constant",
-                                                y_int=0, slope=5515 / (6378000 / 4 - 0),
-                                                const_rho=5990,
-                                                func=lambda x: 4 ** x,
-                                                cp=800,
-                                                k=4,
-                                                nu=2.6e-3,
-                                                alpha=5e-5))  # citation needed
+    K_fes, p_fes, rho_fes, T_fes, mmoi_fes, m_fes, g_fes = run_test(rho=5333, alpha=1.1e-4, T=1980, name="name")
 
-    ganymede.add_layer("Mantle", InternalLayer_1D(651000, 1982000,
-                                                  rho_type="constant",
-                                                  y_int=0, slope=5515 / (6378000 - 6378000 * 0.9999),
-                                                  const_rho=3100,
-                                                  func=lambda x: 4 ** x,
-                                                  cp=1149,
-                                                  k=4,
-                                                  nu=10e19,
-                                                  alpha=3e-5))
-
-    T_ice = 200  # reference: https://solarsystem.nasa.gov/moons/jupiter-moons/ganymede/in-depth/
-    cp_ice = 7.49 * T_ice + 90  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4/pdf
-    k_ice = 567 / T_ice  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4#psjabcbf4s4
-    ganymede.add_layer("Ice", InternalLayer_1D(1982000, 2631000,
-                                               rho_type="constant",
-                                               y_int=5515, slope=5515 / (6378000 - 6378000 / 2),
-                                               const_rho=1000,
-                                               func=lambda x: 4 ** x,
-                                               cp=cp_ice,
-                                               k=k_ice,
-                                               nu=10e12,
-                                               alpha=30e-6))
-
-    initial_rhos = (6000, 2800, 1000)  # our sheet
-    initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
     r_range = np.linspace(0.1, 2631000 - 1, 5000)
-    K, p, rho, T, mmoi, m, g = ganymede.run_convergence(initial_Ks=initial_Ks, T=(1980, T_ice),
-                                            r_range=r_range,
-                                            max_iterations=100, epsilon=1e-5)
 
     plt.figure()
     ax = plt.subplot(321)
-    plt.plot(r_range, K[-1])
-    plt.plot(r_range, K[-2])
-    plt.plot(r_range, K[-3])
+    plt.plot(r_range, K_fes[-1])
+    plt.plot(r_range, K_fe[-1])
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Bulk Modulus")
 
     ax = plt.subplot(322)
-    plt.plot(r_range, p[-1])
-    plt.plot(r_range, p[-2])
-    plt.plot(r_range, p[-3])
+    plt.plot(r_range, p_fes[-1])
+    plt.plot(r_range, p_fe[-1])
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Pressure")
 
     ax = plt.subplot(323)
-    plt.plot(r_range, rho[-1])
-    plt.plot(r_range, rho[-2])
-    plt.plot(r_range, rho[-3])
+    plt.plot(r_range, rho_fes[-1])
+    plt.plot(r_range, rho_fe[-1])
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Density")
 
     ax = plt.subplot(324)
-    plt.plot(r_range, T[-1])
-    plt.plot(r_range, T[-2])
-    plt.plot(r_range, T[-3])
+    plt.plot(r_range, T_fes[-1])
+    plt.plot(r_range, T_fe[-1])
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Temperature")
-    plt.legend(["98 iteration", "99 Iteration", "100 Iteration"])
 
     ax = plt.subplot(325)
-    plt.plot(r_range, g)
+    plt.plot(r_range, g_fes)
+    plt.plot(r_range, g_fe)
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Gravity")
 
     ax = plt.subplot(326)
-    plt.plot(r_range, m)
+    plt.plot(r_range, m_fes)
+    plt.plot(r_range, m_fe)
     ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
     ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
     ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
     plt.title("Mass")
 
+    plt.legend(["FeS", "Fe"])
     plt.tight_layout()
     plt.show()
 
-    print("MMOI: {}".format(mmoi))
+    print("MMOI: Fe{} / FEs{}".format(mmoi_fes / m_fes[-1] / 2631000 ** 2, mmoi_fe / m_fe[-1] / 2631000 ** 2))
+
 
 if __name__ == '__main__':
     # TEST RUNNING #
-    test_func_2()
+    K_fe, p_fe, rho_fe, T_fe, mmoi_fe, m_fe, g_fe = run_test2(alpha=9.2e-5, T=1325, name="name")
+
+    K_fes, p_fes, rho_fes, T_fes, mmoi_fes, m_fes, g_fes = run_test2(alpha=1.1e-4, T=1980, name="name")
+
+    r_range = np.linspace(0.1, 2631000 - 1, 5000)
+
+    plt.figure()
+    ax = plt.subplot(321)
+    plt.plot(r_range, K_fes[-1])
+    plt.plot(r_range, K_fe[-1])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Bulk Modulus")
+
+    ax = plt.subplot(322)
+    plt.plot(r_range, p_fes[-1])
+    plt.plot(r_range, p_fe[-1])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Pressure")
+
+    ax = plt.subplot(323)
+    plt.plot(r_range, rho_fes[-1])
+    plt.plot(r_range, rho_fe[-1])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Density")
+
+    ax = plt.subplot(324)
+    plt.plot(r_range, T_fes[-1])
+    plt.plot(r_range, T_fe[-1])
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Temperature")
+
+    ax = plt.subplot(325)
+    plt.plot(r_range, g_fes)
+    plt.plot(r_range, g_fe)
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Gravity")
+
+    ax = plt.subplot(326)
+    plt.plot(r_range, m_fes)
+    plt.plot(r_range, m_fe)
+    ax.axvspan(0, 651000, facecolor='grey', alpha=0.2)
+    ax.axvspan(651000, 1982000, facecolor='yellow', alpha=0.2)
+    ax.axvspan(1982000, 2631000, facecolor='blue', alpha=0.2)
+    plt.title("Mass")
+
+    plt.legend(["FeS", "Fe"])
+    plt.tight_layout()
+    plt.show()
+
+    print("MMOI: Fe{} / FEs{}".format(mmoi_fes / m_fes[-1] / 2631000 ** 2, mmoi_fe / m_fe[-1] / 2631000 ** 2))
