@@ -1,7 +1,9 @@
 import numpy as np
+
 from InternalLayer import *
 from fdm_funcs import diffusion_1d_steady
 import matplotlib.pyplot as plt
+from utils import convergence_criteria, get_mask, apply_mask
 
 # CONSTANTS #
 # The universal gravitational constant in m^3 * kg^-1 * s^-2
@@ -112,28 +114,28 @@ class Celestial:
 
         if rho is not None:
             diff_r = np.diff(r_range)
-            dp = rho * self.get_g(1, rho_g=rho, r_range_g=r_range) * \
-                                   np.append(diff_r, diff_r[-1])
+            g = self.get_g(1, rho_g=rho, r_range_g=r_range)
+            dp = rho * g * np.append(diff_r, diff_r[-1])
             p_discrete = np.cumsum(dp[::-1])
 
-            return p_discrete[::-1]
+            return p_discrete[::-1], g
 
         def p_func(r, t):
             return self._rho_func(r) * self.get_g(r)
 
         p_range = f_euler(p_func, r_probe, 0, self.top_bound, steps)
 
-        return p_range[::-1]
+        return p_range[::-1], None
 
     def get_dp_drho(self, r, rho):
         diff_r = np.diff(rho)
         return np.cumsum(r * self.get_g(1, rho_g=rho, r_range_g=r) * \
-                                   np.append(diff_r, diff_r[-1]))[::-1]
+                         np.append(diff_r, diff_r[-1]))[::-1]
 
     def get_radii(self):
         return [_.r_bounds[1] for _ in self.layers]
 
-    def get_Cp(self):
+    def get_cp(self):
         return [_.cp for _ in self.layers]
 
     def get_k(self):
@@ -143,85 +145,88 @@ class Celestial:
         return np.array([self._rho_func(r) for r in x_grid])
 
     def _get_new_rho(self, rho, p, K, t, alpha_t=3E-5):
-        return rho * (1 - alpha_t * np.diff(t, append=1e-5) + 1 / K * np.diff(p, append=1e-5))
+        return rho * (1 - alpha_t * t + p / K)
 
-    def get_rayleigh(self, rho, alpha, g, delta_t, d, kappa, nu):
-        return rho * alpha * g * delta_t * d **3 / kappa / nu
+    def get_rayleigh(self, rho, alpha, g, t, d, kappa, nu, r_range):
+        out = alpha * g * kappa
+        for idx, depth in enumerate(d):
+            if idx:
+                mask = np.bitwise_and(d[idx - 1] < r_range, r_range <= depth)
+                out[mask] *= (depth - d[idx - 1]) ** 3 / nu[idx] * (t[mask][0] - t[mask][-1])
+            else:
+                mask = r_range <= depth
+                out[mask] *= depth ** 3 / nu[idx] * (t[mask][0] - t[mask][-1])
 
-    def run_convergence(self, initial_rho, initial_Ks, r_range, max_iterations, T=(15, 3500), epsilon=1e-5):
+        return out
+
+    def get_adiabatic_profile(self, g, cp, alpha, rho):
+        return alpha * g / cp / rho
+
+    def get_bulk_modulus(self, prev_rho, curr_rho, prev_p, curr_p):
+        return prev_rho * (curr_p - prev_p) / (curr_rho - prev_rho)
+
+    def get_alpha(self):
+        return [_.alpha for _ in self.layers]
+
+    def get_nu(self):
+        return [_.nu for _ in self.layers]
+
+    def run_convergence(self, initial_Ks, r_range, max_iterations, T=(15, 3500), epsilon=1e-5):
 
         # PARAMS
         steps = len(r_range)
 
         # VARIABLES
-        # extracting list containing radii of celestial
-        L = self.get_radii()
+        l = self.get_radii()
         # get heat capacity per layer
-        Cp = self.get_Cp()
+        cp = self.get_cp()
         # get material conductivity coefficient
         k = self.get_k()
+        # get thermal expansivity per layer
+        alpha = self.get_alpha()
+        # get viscosity per layer
+        nu = self.get_nu()
 
         # precompute part of kappa for efficiency
-        kappa = np.zeros(steps)
-        K = np.zeros(steps)
-        initial_rhos = np.zeros(steps)
-
-        for idx, length in enumerate(L):
-            if idx:
-                kappa[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = k[idx] / Cp[idx]
-                K[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = initial_Ks[idx]
-                initial_rhos[np.bitwise_and(L[idx - 1] < r_range, r_range <= length)] = initial_rho[idx]
-            else:
-                kappa[r_range <= length] = k[idx] / Cp[idx]
-                K[r_range <= length] = initial_Ks[idx]
-                initial_rhos[r_range <= length] = initial_rho[idx]
+        mask = get_mask(l, r_range)
+        kappa = apply_mask(parameter=np.zeros(steps), mask=mask, input=[k_i / cp[idx] for idx, k_i in enumerate(k)])
+        alphas = apply_mask(parameter=np.zeros(steps), mask=mask, input=alpha)
+        cps = apply_mask(parameter=np.zeros(steps), mask=mask, input=cp)
 
         # get initial rho, p, and k
         # core to ice
         rho = [self.get_rhos(x_grid=r_range)]
         # core to ice
-        K = [K]
+        K = [apply_mask(parameter=np.zeros(steps), mask=mask, input=initial_Ks)]
         # core to ice
-        p = [np.array(self.get_p_range(r_range[0], steps))]
-
-        #ts = [diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range)[1]]
+        p = [np.array(self.get_p_range(r_range[0], steps)[0])]
+        rayleigh = np.zeros_like(kappa)
+        adiabatic_profile = np.zeros_like(kappa)
+        Ts = []
 
         for i in range(max_iterations):
             if i % 5 == 0:
                 print("Iteration {} / {}".format(i, max_iterations))
 
-            _, t = diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range)
+            _, t = diffusion_1d_steady(T=T, kappa=np.copy(kappa), rho=rho[-1], x_grid=r_range, rayleigh=rayleigh,
+                                       adiabatic_profile=adiabatic_profile)
+            Ts.append(t)
 
-            #rho.append(self._get_new_rho(rho=rho[-1], K=.862e+11, t=t - 288.15, p=p[-1] - 101325))
-            rho.append(self._get_new_rho(rho=rho[-1], K=.862e+11, t=t, p=p[-1]))
+            # .862e+11
+            rho.append(self._get_new_rho(rho=rho[0], K=.862e+11, t=t - 288.15, p=p[-1] - 101325))
 
-            #dp_drho = np.diff(p[-1]) / np.diff(rho[-1])
-            #dp_drho = np.append(dp_drho, dp_drho[-1])
+            new_p, g = self.get_p_range(1, 1, rho[-1], r_range)
+            p.append(new_p)
 
-            #K.append(K[-1])#rho[-1] * dp_drho)
+            K.append(self.get_bulk_modulus(curr_rho=rho[-1], prev_rho=rho[0], curr_p=p[-1], prev_p=p[0]))
 
-            p.append(self.get_p_range(1, 1, rho[-1], r_range))
+            rayleigh = self.get_rayleigh(rho[-1], alpha=alphas, g=g, t=t, d=l, kappa=kappa, nu=nu, r_range=r_range)
+            adiabatic_profile = self.get_adiabatic_profile(g=g, cp=cps, alpha=alphas, rho=rho[-1])
 
-            if convergence_criteria(K, p, rho, epsilon):
+            if convergence_criteria([K, p, rho], epsilon):
                 break
 
-        return np.array(K), np.array(p), np.array(rho)
-
-
-def convergence_criteria(K: list, p: list, rho: list, epsilon):
-    # if any(1 - abs(K[-1] / K[-2]) > epsilon):
-    #     return False
-    # print("K has converged")
-
-    if any(1 - abs(p[-1] / p[-2]) > epsilon):
-        return False
-    print("p has converged")
-
-    if any(1 - abs(rho[-1] / rho[-2]) > epsilon):
-        return False
-    print("rho has converged")
-
-    return True
+        return K, p, rho, Ts
 
 
 # TESTS DEFINITION ##
@@ -286,53 +291,72 @@ def test_func_1():
 def test_func_2():
     ganymede = Celestial(name="Ganymede")
 
-    ganymede.add_layer("Core", InternalLayer_1D(-1, 900,
+    ganymede.add_layer("Core", InternalLayer_1D(-1, 651000,
                                                 rho_type="constant",
                                                 y_int=0, slope=5515 / (6378000 / 4 - 0),
-                                                const_rho=5150,
+                                                const_rho=5990,
                                                 func=lambda x: 4 ** x,
                                                 cp=800,
-                                                k=4))  # citation needed
+                                                k=4,
+                                                nu=2.6e-3,
+                                                alpha=5e-5))  # citation needed
 
-    ganymede.add_layer("Mantle", InternalLayer_1D(900, 1849,
+    ganymede.add_layer("Mantle", InternalLayer_1D(651000, 1982000,
                                                   rho_type="constant",
                                                   y_int=0, slope=5515 / (6378000 - 6378000 * 0.9999),
-                                                  const_rho=5515,
+                                                  const_rho=3100,
                                                   func=lambda x: 4 ** x,
                                                   cp=1149,
-                                                  k=4))
+                                                  k=4,
+                                                  nu=10e19,
+                                                  alpha=3e-5))
 
     T_ice = 200  # reference: https://solarsystem.nasa.gov/moons/jupiter-moons/ganymede/in-depth/
     cp_ice = 7.49 * T_ice + 90  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4/pdf
     k_ice = 567 / T_ice  # reference: https://iopscience.iop.org/article/10.3847/PSJ/abcbf4#psjabcbf4s4
-    ganymede.add_layer("Ice", InternalLayer_1D(1849, 2634,
+    ganymede.add_layer("Ice", InternalLayer_1D(1982000, 2631000,
                                                rho_type="constant",
                                                y_int=5515, slope=5515 / (6378000 - 6378000 / 2),
-                                               const_rho=1182,
+                                               const_rho=1000,
                                                func=lambda x: 4 ** x,
                                                cp=cp_ice,
-                                               k=k_ice))
+                                               k=k_ice,
+                                               nu=10e12,
+                                               alpha=30e-6))
 
     initial_rhos = (6000, 2800, 1000)  # our sheet
     initial_Ks = (5.54e11, 3.91e11, 8.13e10)  # our sheet
-    r_range = np.linspace(0.1, 2634 - 1, 5000)
-    K, p, rho = ganymede.run_convergence(initial_rho=initial_rhos, initial_Ks=initial_Ks, T=(1980, T_ice),
-                                         r_range=r_range,
-                                         max_iterations=100, epsilon=1e-5)
+    r_range = np.linspace(0.1, 2631000 - 1, 5000)
+    K, p, rho, T = ganymede.run_convergence(initial_Ks=initial_Ks, T=(1980, T_ice),
+                                            r_range=r_range,
+                                            max_iterations=100, epsilon=1e-5)
 
     plt.figure()
-    plt.subplot(311)
-    plt.matshow(K)
+    plt.subplot(221)
+    plt.plot(K[-1])
+    plt.plot(K[-2])
+    plt.plot(K[-3])
     plt.title("Bulk Modulus")
 
-    plt.subplot(312)
-    plt.matshow(p)
+    plt.subplot(222)
+    plt.plot(p[-1])
+    plt.plot(p[-2])
+    plt.plot(p[-3])
     plt.title("Pressure")
 
-    plt.subplot(313)
-    plt.matshow(rho)
+    plt.subplot(223)
+    plt.plot(rho[-1])
+    plt.plot(rho[-2])
+    plt.plot(rho[-3])
     plt.title("Density")
+
+    plt.subplot(224)
+    plt.plot(T[-1])
+    plt.plot(T[-2])
+    plt.plot(T[-3])
+    plt.title("Temperature")
     plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':

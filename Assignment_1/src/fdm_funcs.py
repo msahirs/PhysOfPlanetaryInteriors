@@ -10,7 +10,7 @@ speed and reduce computational complexity - in case of iterative usage
 """
 
 
-def diffusion_1d_steady(T, kappa, rho, x_grid, ):
+def diffusion_1d_steady(T, kappa, rho, x_grid, rayleigh, adiabatic_profile):
     """`diffusion_1d_steady(...)` is used to calculate the 1D
     Poisson (Heat) equation at steady state.
 
@@ -50,7 +50,7 @@ def diffusion_1d_steady(T, kappa, rho, x_grid, ):
     kappa /= rho
 
     # Compute length of discrete element
-    dx = 1 / x_steps
+    dx = (x_grid[1] - x_grid[0])
 
     # Pre-factor for elements within Finite-Difference (FD) matrix
     fd_factor = kappa / dx ** 2
@@ -59,25 +59,24 @@ def diffusion_1d_steady(T, kappa, rho, x_grid, ):
     A = np.eye(x_steps)
     b = np.zeros(x_steps)
 
-    # Setup of FD matrix
-    np.fill_diagonal(A[1:-1, 1:-1], fd_factor[2:] + fd_factor[:-2])
-    np.fill_diagonal(A[1:-1, 2:], -fd_factor[2:])
-    np.fill_diagonal(A[1:-1, :-2], -fd_factor[:-2])
+    fd_factor[rayleigh > 1E4] = 1 / dx / 2
 
-    # # Uncomment below to visualise A matrix sparsity
-    # plt.spy(A, marker = "o", markersize= 15, alpha = 1, color = 'red')
-    # plt.show()
+    # Setup of FD matrix for conductive heating
+    np.fill_diagonal(A[1:-1, 1:-1], fd_factor[2:] + fd_factor[:-2])
+
+    fd_factor1 = -fd_factor
+    fd_factor2 = -fd_factor
+
+    np.fill_diagonal(A[1:-1, :-2], fd_factor1[:-2])
+    np.fill_diagonal(A[1:-1, 2:], fd_factor2[2:])
+
+    A[0, 0] = 1
+    A[-1, -1] = 1
 
     # Set up conditions of b vector for adiabatic boundary
+    b[rayleigh > 1E4] = adiabatic_profile[rayleigh > 1E4]
     b[0] = T[0]
     b[-1] = T[1]
-
-    # Making any element, except 0 and -1, non-zero represents an input
-    # heat flux. This can be used to add sources/sinks to the poisson equation
-    # Below line is set such that no added/removed heat
-    # COMMENT: any reason? Is already 0
-    # REPLY: Yeah was just there for testing heat flux addition
-    # b[1:-1] = 0
 
     # Solve System of Equations
     sol_x = linalg.solve(A, b)

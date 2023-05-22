@@ -25,11 +25,13 @@ class InternalLayer_1D(InternalLayer):
     or decreasing, or a custom function - i.e. `rho(r)`
     """
 
-    def __init__(self, r_start, r_end, cp, k, rho_type, **kwargs) -> None:
+    def __init__(self, r_start, r_end, cp, k, nu, alpha, rho_type, **kwargs) -> None:
         self.r_bounds = (r_start, r_end)
         self.rho_type = rho_type
         self.cp = cp
         self.k = k
+        self.nu = nu
+        self.alpha = alpha
         self.params = kwargs
 
         self.rho_function = self._rho_func_generator()
