@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from itertools import accumulate
 
 #Get time constant
 def time_const(rho_cr,nu,g_surf,lamb):
@@ -32,19 +33,28 @@ w_range = exp_decrement(t_range,t_r,w)
 print("Time constant: %.3E" % t_r)
 print(f"Time Interval for analytical: {t_range[1]:.3E}", )
 
+
+# ABAQUS OUTPUT LISTS
+abs_mins = [1813, 1264,946.4,720.8,556.5,
+            434.7,343.3,274.0,221.1,180.6,
+            151.1,129.3,112.5,99.03,88.58,
+            79.95,72.77,66.72,61.6,57.28,
+            53.55,50.28]
+t_stamps = [0] + list(accumulate([2.0E13]*21))
+
+
 # PLOTTING
 
-# # ABAQUS calculation
-# plt.plot(t_range, w_range,
-#          'x--', color = 'blue', alpha = 0.7,
-#          label = "ABAQUS Model")
+# ABAQUS calculation
+plt.plot(t_stamps, abs_mins,
+         'x--', color = 'blue', alpha = 0.7,
+         label = "ABAQUS Model")
 
 # Analytical calculation
 plt.plot(t_range, w_range,
          color = 'orange', alpha = 0.7, 
          label = f"Turcotte and Schubert, \n $t_r = {t_r:.3E} $")
 
-plt.plot(1.050E+13,1462, "x")
 
 plt.title("Numerical (ABAQUS) vs Analytical Solutions")
 plt.xlabel("Elapsed time [t]")

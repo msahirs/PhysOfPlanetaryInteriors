@@ -23,15 +23,18 @@ z = - hb*(x/base).^2 - hb*(y/base).^2 + hb;
 z(z<min_ice) = min_ice;
 
 figure(30); scatter(x,y,10,z); colorbar
+xlabel('x-axis [km]','FontSize',10)
+ylabel('y-axis [km]','FontSize',10)
+title('Height variation on surface [m]')
 
-% Save file
-% Element number, load type, magnitude
-% Write file
-fid = fopen('load','w'); 
-for ii = 1:length(x)
-    fprintf(fid,'%6i, P2,%12.3E\n',no(ii),z(ii)*g*rho_ice);
-end
-fclose(fid);
+% % Save file
+% % Element number, load type, magnitude
+% % Write file
+% fid = fopen('load','w'); 
+% for ii = 1:length(x)
+%     fprintf(fid,'%6i, P2,%12.3E\n',no(ii),z(ii)*g*rho_ice);
+% end
+% fclose(fid);
 
 
 
