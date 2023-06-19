@@ -35,6 +35,7 @@ print(f"Time Interval for analytical: {t_range[1]:.3E}", )
 
 
 # ABAQUS OUTPUT LISTS
+
 abs_mins = [1813, 1264,946.4,720.8,556.5,
             434.7,343.3,274.0,221.1,180.6,
             151.1,129.3,112.5,99.03,88.58,
