@@ -4,16 +4,18 @@ Hello! I'm Sahir, someone who's happening to be taking this course in the TU Del
 
 #### Assignments Status
 
-- __Assignment 1:__ ***Bulk vs. 1D profile of a planetary interior*** (In progress)
-- __Assignment 2:__ _Not announced_
+- __Assignment 1:__ ***Bulk vs. 1D profile of a planetary interior*** (Done)
+- __Assignment 2:__ ***How does a planet deform? - Finite element model for viscous deformation*** (In progress)
 - __Assignment 3:__ _Not announced_
+
 #### Dependencies
 
 ```text
-Python 3.0+
+python 3.6+
 numpy
 scipy
 matplotlib
+burnman
 ```
 
 *P.S. I will be working on this with a fellow friendo!*
